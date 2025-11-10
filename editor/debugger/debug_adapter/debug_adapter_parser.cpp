@@ -182,7 +182,7 @@ Dictionary DebugAdapterParser::req_launch(const Dictionary &p_params) const {
 
 	DebugAdapterProtocol::get_singleton()->get_current_peer()->pending_launch = p_params;
 
-	return Dictionary();
+	return prepare_success_response(p_params);
 }
 
 Vector<String> DebugAdapterParser::_extract_play_arguments(const Dictionary &p_args) const {
