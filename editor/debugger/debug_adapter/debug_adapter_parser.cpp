@@ -71,8 +71,8 @@ Dictionary DebugAdapterParser::prepare_base_event() const {
 Dictionary DebugAdapterParser::prepare_success_response(const Dictionary &p_params) const {
 	Dictionary response;
 	response["type"] = "response";
-	response["request_seq"] = p_params["seq"];
-	response["command"] = p_params["command"];
+	response["request_seq"] = p_params.get("seq", 0);
+	response["command"] = p_params.get("command", "");
 	response["success"] = true;
 
 	return response;
@@ -81,8 +81,8 @@ Dictionary DebugAdapterParser::prepare_success_response(const Dictionary &p_para
 Dictionary DebugAdapterParser::prepare_error_response(const Dictionary &p_params, DAP::ErrorType err_type, const Dictionary &variables) const {
 	Dictionary response, body;
 	response["type"] = "response";
-	response["request_seq"] = p_params["seq"];
-	response["command"] = p_params["command"];
+	response["request_seq"] = p_params.get("seq", 0);
+	response["command"] = p_params.get("command", "");
 	response["success"] = false;
 	response["body"] = body;
 
@@ -127,7 +127,7 @@ Dictionary DebugAdapterParser::prepare_error_response(const Dictionary &p_params
 
 Dictionary DebugAdapterParser::req_initialize(const Dictionary &p_params) const {
 	Dictionary response = prepare_success_response(p_params);
-	Dictionary args = p_params["arguments"];
+	Dictionary args = p_params.get("arguments", Dictionary());
 
 	Ref<DAPeer> peer = DebugAdapterProtocol::get_singleton()->get_current_peer();
 
@@ -168,16 +168,16 @@ Dictionary DebugAdapterParser::req_disconnect(const Dictionary &p_params) const 
 }
 
 Dictionary DebugAdapterParser::req_launch(const Dictionary &p_params) const {
-	Dictionary args = p_params["arguments"];
-	if (args.has("project") && !is_valid_path(args["project"])) {
+	Dictionary args = p_params.get("arguments", Dictionary());
+	if (args.has("project") && !is_valid_path(args.get("project", ""))) {
 		Dictionary variables;
-		variables["clientPath"] = args["project"];
+		variables["clientPath"] = args.get("project", "");
 		variables["editorPath"] = ProjectSettings::get_singleton()->get_resource_path();
 		return prepare_error_response(p_params, DAP::ErrorType::WRONG_PATH, variables);
 	}
 
 	if (args.has("godot/custom_data")) {
-		DebugAdapterProtocol::get_singleton()->get_current_peer()->supportsCustomData = args["godot/custom_data"];
+		DebugAdapterProtocol::get_singleton()->get_current_peer()->supportsCustomData = args.get("godot/custom_data", false);
 	}
 
 	DebugAdapterProtocol::get_singleton()->get_current_peer()->pending_launch = p_params;
@@ -188,7 +188,7 @@ Dictionary DebugAdapterParser::req_launch(const Dictionary &p_params) const {
 Vector<String> DebugAdapterParser::_extract_play_arguments(const Dictionary &p_args) const {
 	Vector<String> play_args;
 	if (p_args.has("playArgs")) {
-		Variant v = p_args["playArgs"];
+		Variant v = p_args.get("playArgs", Array());
 		if (v.get_type() == Variant::ARRAY) {
 			Array arr = v;
 			for (const Variant &arg : arr) {
@@ -200,9 +200,9 @@ Vector<String> DebugAdapterParser::_extract_play_arguments(const Dictionary &p_a
 }
 
 Dictionary DebugAdapterParser::_launch_process(const Dictionary &p_params) const {
-	Dictionary args = p_params["arguments"];
+	Dictionary args = p_params.get("arguments", Dictionary());
 	ScriptEditorDebugger *dbg = EditorDebuggerNode::get_singleton()->get_default_debugger();
-	if ((bool)args["noDebug"] != dbg->is_skip_breakpoints()) {
+	if ((bool)args.get("noDebug", false) != dbg->is_skip_breakpoints()) {
 		dbg->debug_skip_breakpoints();
 	}
 
@@ -259,13 +259,13 @@ Dictionary DebugAdapterParser::req_attach(const Dictionary &p_params) const {
 Dictionary DebugAdapterParser::req_restart(const Dictionary &p_params) const {
 	// Extract embedded "arguments" so it can be given to req_launch/req_attach
 	Dictionary params = p_params, args;
-	args = params["arguments"];
-	args = args["arguments"];
+	args = params.get("arguments", Dictionary());
+	args = args.get("arguments", Dictionary());
 	params["arguments"] = args;
 
 	Dictionary response = DebugAdapterProtocol::get_singleton()->get_current_peer()->attached ? req_attach(params) : _launch_process(params);
 	if (!response["success"]) {
-		response["command"] = p_params["command"];
+		response["command"] = p_params.get("command", "");
 		return response;
 	}
 
@@ -352,9 +352,9 @@ Dictionary DebugAdapterParser::req_setBreakpoints(const Dictionary &p_params) co
 	Dictionary response = prepare_success_response(p_params), body;
 	response["body"] = body;
 
-	Dictionary args = p_params["arguments"];
+	Dictionary args = p_params.get("arguments", Dictionary());
 	DAP::Source source;
-	source.from_json(args["source"]);
+	source.from_json(args.get("source", Dictionary()));
 
 	bool lines_at_one = DebugAdapterProtocol::get_singleton()->get_current_peer()->linesStartAt1;
 
@@ -371,7 +371,7 @@ Dictionary DebugAdapterParser::req_setBreakpoints(const Dictionary &p_params) co
 		source.path = source.path.substr(0, 1).to_upper() + source.path.substr(1);
 	}
 
-	Array breakpoints = args["breakpoints"], lines;
+	Array breakpoints = args.get("breakpoints", Array()), lines;
 	for (int i = 0; i < breakpoints.size(); i++) {
 		DAP::SourceBreakpoint breakpoint;
 		breakpoint.from_json(breakpoints[i]);
@@ -390,12 +390,12 @@ Dictionary DebugAdapterParser::req_setBreakpoints(const Dictionary &p_params) co
 Dictionary DebugAdapterParser::req_breakpointLocations(const Dictionary &p_params) const {
 	Dictionary response = prepare_success_response(p_params), body;
 	response["body"] = body;
-	Dictionary args = p_params["arguments"];
+	Dictionary args = p_params.get("arguments", Dictionary());
 
 	DAP::BreakpointLocation location;
-	location.line = args["line"];
+	location.line = args.get("line", 0);
 	if (args.has("endLine")) {
-		location.endLine = args["endLine"];
+		location.endLine = args.get("endLine", -1);
 	}
 	Array locations = { location.to_json() };
 
@@ -407,8 +407,8 @@ Dictionary DebugAdapterParser::req_scopes(const Dictionary &p_params) const {
 	Dictionary response = prepare_success_response(p_params), body;
 	response["body"] = body;
 
-	Dictionary args = p_params["arguments"];
-	int frame_id = args["frameId"];
+	Dictionary args = p_params.get("arguments", Dictionary());
+	int frame_id = args.get("frameId", 0);
 	Array scope_list;
 
 	HashMap<DebugAdapterProtocol::DAPStackFrameID, Vector<int>>::Iterator E = DebugAdapterProtocol::get_singleton()->scope_list.find(frame_id);
@@ -449,8 +449,8 @@ Dictionary DebugAdapterParser::req_variables(const Dictionary &p_params) const {
 		return Dictionary();
 	}
 
-	Dictionary args = p_params["arguments"];
-	int variable_id = args["variablesReference"];
+	Dictionary args = p_params.get("arguments", Dictionary());
+	int variable_id = args.get("variablesReference", 0);
 
 	if (HashMap<int, Array>::Iterator E = DebugAdapterProtocol::get_singleton()->variable_list.find(variable_id); E) {
 		Dictionary response = prepare_success_response(p_params);
@@ -494,9 +494,9 @@ Dictionary DebugAdapterParser::req_stepIn(const Dictionary &p_params) const {
 }
 
 Dictionary DebugAdapterParser::req_evaluate(const Dictionary &p_params) const {
-	Dictionary args = p_params["arguments"];
-	String expression = args["expression"];
-	int frame_id = args.has("frameId") ? static_cast<int>(args["frameId"]) : DebugAdapterProtocol::get_singleton()->_current_frame;
+	Dictionary args = p_params.get("arguments", Dictionary());
+	String expression = args.get("expression", "");
+	int frame_id = args.get("frameId", DebugAdapterProtocol::get_singleton()->_current_frame);
 
 	if (HashMap<String, DAP::Variable>::Iterator E = DebugAdapterProtocol::get_singleton()->eval_list.find(expression); E) {
 		Dictionary response = prepare_success_response(p_params);
@@ -518,10 +518,10 @@ Dictionary DebugAdapterParser::req_evaluate(const Dictionary &p_params) const {
 }
 
 Dictionary DebugAdapterParser::req_godot_put_msg(const Dictionary &p_params) const {
-	Dictionary args = p_params["arguments"];
+	Dictionary args = p_params.get("arguments", Dictionary());
 
-	String msg = args["message"];
-	Array data = args["data"];
+	String msg = args.get("message", "");
+	Array data = args.get("data", Array());
 
 	EditorDebuggerNode::get_singleton()->get_default_debugger()->_put_msg(msg, data);
 

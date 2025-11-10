@@ -854,7 +854,7 @@ bool DebugAdapterProtocol::process_message(const String &p_text) {
 
 	// While JSON does not distinguish floats and ints, "seq" is an integer by specification. See https://github.com/godotengine/godot/issues/108288
 	if (params.has("seq")) {
-		params["seq"] = (int)params["seq"];
+		params["seq"] = (int)params.get("seq", 0);
 	}
 
 	if (OS::get_singleton()->get_ticks_msec() - _current_peer->timestamp > _request_timeout) {
@@ -864,9 +864,9 @@ bool DebugAdapterProtocol::process_message(const String &p_text) {
 	}
 
 	// Append "req_" to any command received; prevents name clash with existing functions, and possibly exploiting
-	String command = "req_" + (String)params["command"];
+	String command = "req_" + (String)params.get("command", "");
 	if (parser->has_method(command)) {
-		_current_request = params["command"];
+		_current_request = params.get("command", "");
 
 		Array args = { params };
 		Dictionary response = parser->callv(command, args);
@@ -1089,8 +1089,8 @@ void DebugAdapterProtocol::on_debug_stack_dump(const Array &p_stack_dump) {
 	if (_processing_breakpoint && !p_stack_dump.is_empty()) {
 		// Find existing breakpoint
 		Dictionary d = p_stack_dump[0];
-		DAP::Breakpoint breakpoint(fetch_source(d["file"]));
-		breakpoint.line = d["line"];
+		DAP::Breakpoint breakpoint(fetch_source(d.get("file", "")));
+		breakpoint.line = d.get("line", 0);
 
 		List<DAP::Breakpoint>::Element *E = breakpoint_list.find(breakpoint);
 		if (E) {
@@ -1108,10 +1108,10 @@ void DebugAdapterProtocol::on_debug_stack_dump(const Array &p_stack_dump) {
 	for (int i = 0; i < p_stack_dump.size(); i++) {
 		Dictionary stack_info = p_stack_dump[i];
 
-		DAP::StackFrame stackframe(fetch_source(stack_info["file"]));
+		DAP::StackFrame stackframe(fetch_source(stack_info.get("file", "")));
 		stackframe.id = stackframe_id++;
-		stackframe.name = stack_info["function"];
-		stackframe.line = stack_info["line"];
+		stackframe.name = stack_info.get("function", "");
+		stackframe.line = stack_info.get("line", 0);
 		stackframe.column = 0;
 
 		// Information for "Locals", "Members" and "Globals" variables respectively
